@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RideGuard Web Companion</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- Leaflet.js for maps -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" defer></script>
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       TOPBAR
+       ═══════════════════════════════════════════════════════════ -->
+  <header class="topbar">
+    <div class="topbar__brand">
+      <svg class="brand-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2L4 6v6c0 5.5 3.8 10.7 8 12 4.2-1.3 8-6.5 8-12V6L12 2z" fill="currentColor" opacity="0.9"/>
+        <path d="M9 12l2 2 4-4" stroke="#0A1F44" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="brand-name">RideGuard</span>
+      <span class="brand-sub">Web Companion</span>
+    </div>
+
+    <!-- BLE Connection controls -->
+    <div class="topbar__ble">
+      <div class="ble-status" id="ble-status-indicator">
+        <span class="ble-dot" id="ble-dot"></span>
+        <span class="ble-label" id="ble-label">Disconnected</span>
+      </div>
+      <button class="btn btn--primary btn--sm" id="btn-connect">
+        <svg viewBox="0 0 24 24" fill="none" width="14" height="14"><path d="M7 7h10v10l-5-5-5 5V7z" fill="currentColor" opacity="0.7"/><path d="M17 12h2m-9-9v2M12 19v2M5.6 5.6l1.4 1.4m9 9l1.4 1.4M5.6 18.4l1.4-1.4m9-9l1.4-1.4M3 12H5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Connect Helmet
+      </button>
+      <button class="btn btn--ghost btn--sm hidden" id="btn-disconnect">Disconnect</button>
+    </div>
+
+    <!-- Ride status pill -->
+    <div class="topbar__ride">
+      <span class="ride-badge" id="ride-badge">● Ride Idle</span>
+      <button class="btn btn--accent btn--sm" id="btn-toggle-ride">Start Ride</button>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       MAIN LAYOUT  – 3-column grid
+       ═══════════════════════════════════════════════════════════ -->
+  <main class="layout">
+
+    <!-- ─── LEFT PANEL: Telemetry + Quick controls ─── -->
+    <section class="panel panel--left" aria-label="Telemetry">
+
+      <!-- G-Force / Risk -->
+      <div class="card card--gforce">
+        <div class="card__header">
+          <h2 class="card__title">Impact G-Force</h2>
+          <span class="risk-badge" id="risk-badge">SAFE</span>
+        </div>
+        <div class="gforce-gauge">
+          <svg class="gauge-svg" viewBox="0 0 200 130">
+            <!-- Background arc -->
+            <path d="M 20 110 A 80 80 0 0 1 180 110" fill="none" stroke="#1a2f5a" stroke-width="16" stroke-linecap="round"/>
+            <!-- Value arc -->
+            <path id="gauge-arc" d="M 20 110 A 80 80 0 0 1 180 110" fill="none" stroke="#4FC3F7" stroke-width="16" stroke-linecap="round"
+                  stroke-dasharray="0 251" style="transition: all 0.3s ease"/>
+            <!-- Zone markers -->
+            <circle cx="100" cy="104" r="3" fill="#FFD600" opacity="0.6"/><!-- 2.5g marker -->
+            <circle cx="100" cy="104" r="3" fill="#FF1744" opacity="0" id="danger-dot"/>
+          </svg>
+          <div class="gforce-value">
+            <span class="gforce-num" id="gforce-num">0.00</span>
+            <span class="gforce-unit">g</span>
+          </div>
+        </div>
+        <div class="gforce-meta">
+          <span class="meta-item">Session max: <strong id="session-max-g">0.00g</strong></span>
+          <span class="meta-item" id="fall-flag-indicator">Fall: <strong class="safe">None</strong></span>
+        </div>
+      </div>
+
+      <!-- Accelerometer raw values -->
+      <div class="card">
+        <h2 class="card__title">Accelerometer <span class="unit-hint">(g)</span></h2>
+        <div class="axes-grid">
+          <div class="axis-row">
+            <span class="axis-label axis-label--x">X</span>
+            <div class="axis-bar-wrap"><div class="axis-bar axis-bar--x" id="bar-ax"></div></div>
+            <span class="axis-val mono" id="val-ax">+0.000</span>
+          </div>
+          <div class="axis-row">
+            <span class="axis-label axis-label--y">Y</span>
+            <div class="axis-bar-wrap"><div class="axis-bar axis-bar--y" id="bar-ay"></div></div>
+            <span class="axis-val mono" id="val-ay">+0.000</span>
+          </div>
+          <div class="axis-row">
+            <span class="axis-label axis-label--z">Z</span>
+            <div class="axis-bar-wrap"><div class="axis-bar axis-bar--z" id="bar-az"></div></div>
+            <span class="axis-val mono" id="val-az">+1.000</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gyroscope raw values -->
+      <div class="card">
+        <h2 class="card__title">Gyroscope <span class="unit-hint">(°/s)</span></h2>
+        <div class="axes-grid">
+          <div class="axis-row">
+            <span class="axis-label axis-label--x">Roll</span>
+            <div class="axis-bar-wrap"><div class="axis-bar axis-bar--x" id="bar-gx"></div></div>
+            <span class="axis-val mono" id="val-gx">+0.0</span>
+          </div>
+          <div class="axis-row">
+            <span class="axis-label axis-label--y">Pitch</span>
+            <div class="axis-bar-wrap"><div class="axis-bar axis-bar--y" id="bar-gy"></div></div>
+            <span class="axis-val mono" id="val-gy">+0.0</span>
+          </div>
+          <div class="axis-row">
+            <span class="axis-label axis-label--z">Yaw</span>
+            <div class="axis-bar-wrap"><div class="axis-bar axis-bar--z" id="bar-gz"></div></div>
+            <span class="axis-val mono" id="val-gz">+0.0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- GPS Quick view -->
+      <div class="card card--gps">
+        <h2 class="card__title">GPS Position</h2>
+        <div class="gps-grid">
+          <div class="gps-field">
+            <span class="gps-lbl">Latitude</span>
+            <span class="gps-val mono" id="gps-lat">—</span>
+          </div>
+          <div class="gps-field">
+            <span class="gps-lbl">Longitude</span>
+            <span class="gps-val mono" id="gps-lon">—</span>
+          </div>
+          <div class="gps-field">
+            <span class="gps-lbl">Speed</span>
+            <span class="gps-val mono" id="gps-speed">— km/h</span>
+          </div>
+          <div class="gps-field">
+            <span class="gps-lbl">Fix</span>
+            <span class="gps-val" id="gps-fix">No Fix</span>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ─── CENTER PANEL: Map ─── -->
+    <section class="panel panel--center" aria-label="Map">
+      <div class="card card--map">
+        <div class="card__header">
+          <h2 class="card__title">Live Map</h2>
+          <div class="map-controls">
+            <button class="btn btn--ghost btn--xs" id="btn-center-map" title="Center on position">⊕ Center</button>
+            <button class="btn btn--ghost btn--xs" id="btn-clear-route" title="Clear route">✕ Clear Route</button>
+          </div>
+        </div>
+        <div id="map-container"></div>
+        <div class="map-legend">
+          <span class="legend-item"><span class="legend-dot legend-dot--helmet"></span>Helmet GPS</span>
+          <span class="legend-item"><span class="legend-dot legend-dot--phone"></span>Browser GPS</span>
+          <span class="legend-item"><span class="legend-dot legend-dot--route"></span>Route</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─── RIGHT PANEL: Debug + Emergency ─── -->
+    <section class="panel panel--right" aria-label="Debug tools">
+
+      <!-- Emergency controls -->
+      <div class="card card--emergency">
+        <h2 class="card__title">⚠ Emergency System</h2>
+        <p class="card__sub">Simulation only — no real SMS sent</p>
+        <div class="emergency-btns">
+          <button class="btn btn--danger btn--lg" id="btn-simulate-fall">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none"><path d="M12 3l1.5 4.5H18l-3.75 2.7 1.5 4.5L12 12l-3.75 2.7 1.5-4.5L6 7.5h4.5L12 3z" fill="currentColor" opacity="0.8"/></svg>
+            Simulate Fall
+          </button>
+          <button class="btn btn--warning btn--sm" id="btn-inject-accel">
+            Inject High-G Pulse
+          </button>
+        </div>
+        <div class="emergency-state" id="emergency-state-display">
+          <span class="state-dot state-dot--ok"></span>
+          <span id="emergency-state-text">System Idle</span>
+        </div>
+      </div>
+
+      <!-- Serial Monitor -->
+      <div class="card card--serial">
+        <div class="card__header">
+          <h2 class="card__title">Serial Monitor</h2>
+          <div class="serial-controls">
+            <label class="toggle-label">
+              <input type="checkbox" id="chk-autoscroll" checked>
+              <span>Auto-scroll</span>
+            </label>
+            <button class="btn btn--ghost btn--xs" id="btn-clear-log">Clear</button>
+            <button class="btn btn--ghost btn--xs" id="btn-export-log">Export</button>
+          </div>
+        </div>
+        <div class="serial-filter">
+          <button class="filter-pill active" data-filter="all">All</button>
+          <button class="filter-pill" data-filter="ble">BLE</button>
+          <button class="filter-pill" data-filter="gps">GPS</button>
+          <button class="filter-pill" data-filter="mpu">MPU</button>
+          <button class="filter-pill" data-filter="sys">System</button>
+        </div>
+        <div class="serial-output" id="serial-output" role="log" aria-live="polite" aria-label="Serial monitor output">
+          <div class="serial-line sys">[SYSTEM] RideGuard Web Companion initializing…</div>
+        </div>
+      </div>
+
+      <!-- Ride History -->
+      <div class="card card--history">
+        <div class="card__header">
+          <h2 class="card__title">Ride History</h2>
+          <button class="btn btn--ghost btn--xs" id="btn-clear-history">Clear All</button>
+        </div>
+        <div class="history-stats" id="history-stats">
+          <span class="stat">Rides: <strong id="stat-total-rides">0</strong></span>
+          <span class="stat">Distance: <strong id="stat-total-dist">0 km</strong></span>
+          <span class="stat">Incidents: <strong id="stat-incidents">0</strong></span>
+        </div>
+        <div class="history-list" id="history-list">
+          <p class="empty-state">No rides recorded yet. Start a ride to begin logging.</p>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       EMERGENCY OVERLAY
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="emergency-overlay hidden" id="emergency-overlay" role="alertdialog" aria-modal="true" aria-label="Emergency Alert">
+    <div class="emergency-overlay__content">
+      <div class="emergency-pulse-ring"></div>
+      <div class="emergency-icon">⚠</div>
+      <h1 class="emergency-title">ARE YOU OK?</h1>
+      <p class="emergency-desc">A fall has been detected.<br>Emergency alert will be sent automatically.</p>
+
+      <div class="countdown-wrap">
+        <svg class="countdown-ring" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="8"/>
+          <circle id="countdown-circle" cx="60" cy="60" r="52" fill="none" stroke="#FF1744"
+                  stroke-width="8" stroke-linecap="round"
+                  stroke-dasharray="326.7" stroke-dashoffset="0"
+                  transform="rotate(-90 60 60)"
+                  style="transition: stroke-dashoffset 1s linear"/>
+        </svg>
+        <div class="countdown-center">
+          <span class="countdown-num" id="countdown-num">10</span>
+          <span class="countdown-unit">sec</span>
+        </div>
+      </div>
+
+      <div class="emergency-source" id="emergency-source">Source: Simulation</div>
+
+      <button class="btn btn--cancel-alert" id="btn-cancel-alert">
+        ✓  I'M OK — CANCEL ALERT
+      </button>
+
+      <div class="emergency-log-note">
+        [SIM] No real SMS is sent in the web companion.
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       TOAST NOTIFICATIONS
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="toast-container" id="toast-container" aria-live="polite"></div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       WEB BLUETOOTH NOT SUPPORTED BANNER
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="ble-unsupported-banner hidden" id="ble-unsupported-banner">
+    <strong>⚠ Web Bluetooth not supported</strong> — Use Chrome on desktop or Android. BLE features are disabled; simulation mode is still available.
+    <button class="btn btn--ghost btn--xs" onclick="this.parentElement.classList.add('hidden')">✕</button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       MODULE SCRIPTS (ES Modules)
+       ═══════════════════════════════════════════════════════════ -->
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
